@@ -3,13 +3,15 @@ import { Sentiment, SentimentAnalysisResult } from './types';
 import { analyzeSentiment } from './services/geminiService';
 import SentimentResultDisplay from './components/SentimentResultDisplay';
 import SentimentChart from './components/SentimentChart';
-import { UploadIcon } from './components/icons';
+import ErrorAlert from './components/ErrorAlert';
+import { UploadIcon, PulsingDotsLoader } from './components/icons';
 
 const App: React.FC = () => {
     const [text, setText] = useState<string>('');
     const [results, setResults] = useState<SentimentAnalysisResult[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const [batchProgress, setBatchProgress] = useState<{ processed: number; total: number } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleAnalysis = useCallback(async (inputText: string) => {
@@ -19,6 +21,7 @@ const App: React.FC = () => {
         }
         setIsLoading(true);
         setError(null);
+        setBatchProgress(null);
         try {
             const analysis = await analyzeSentiment(inputText);
             const newResult: SentimentAnalysisResult = { text: inputText, ...analysis };
@@ -49,20 +52,25 @@ const App: React.FC = () => {
                 const fileContent = event.target?.result as string;
                 const lines = fileContent.split('\n').filter(line => line.trim() !== '');
                 
+                if (lines.length === 0) return;
+
                 setIsLoading(true);
                 setError(null);
+                setBatchProgress({ processed: 0, total: lines.length });
                 
                 const batchResults: SentimentAnalysisResult[] = [];
-                for (const line of lines) {
+                for (const [index, line] of lines.entries()) {
                     try {
                         const analysis = await analyzeSentiment(line);
                         batchResults.push({ text: line, ...analysis });
                     } catch (err) {
                         console.error(`Failed to analyze line: "${line}"`, err);
                     }
+                    setBatchProgress({ processed: index + 1, total: lines.length });
                 }
                 setResults(prev => [...batchResults.reverse(), ...prev]);
                 setIsLoading(false);
+                setBatchProgress(null);
             };
             reader.readAsText(file);
         }
@@ -100,22 +108,36 @@ const App: React.FC = () => {
                                     className="w-full h-40 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow resize-none bg-gray-50/50"
                                     disabled={isLoading}
                                 />
-                                {error && <p className="text-red-500 mt-2 text-sm">{error}</p>}
+                                {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
+                                
+                                {batchProgress && (
+                                    <div className="mt-4">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-sm font-medium text-indigo-700">
+                                                Processing batch...
+                                            </span>
+                                            <span className="text-sm font-medium text-gray-500">
+                                                {batchProgress.processed} / {batchProgress.total}
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-indigo-100 rounded-full h-2.5">
+                                            <div
+                                                className="bg-indigo-600 h-2.5 rounded-full transition-all duration-200"
+                                                style={{ width: `${(batchProgress.processed / batchProgress.total) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex flex-wrap items-center justify-between gap-4 mt-4">
                                     <div className="flex gap-2">
                                          <button
                                             type="submit"
-                                            className="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-indigo-700 transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
+                                            className="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-indigo-700 transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center w-36"
                                             disabled={isLoading}
                                         >
-                                            {isLoading ? (
-                                                <>
-                                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                    </svg>
-                                                    Analyzing...
-                                                </>
+                                            {isLoading && !batchProgress ? (
+                                                <PulsingDotsLoader />
                                             ) : 'Analyze Text'}
                                         </button>
                                         <button
