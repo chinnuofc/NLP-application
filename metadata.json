@@ -1,0 +1,5 @@
+{
+  "name": "Sentiment Analysis AI",
+  "description": "An AI-powered application to analyze the emotional tone (positive, negative, or neutral) of any text input. It provides real-time sentiment classification, a confidence score, and visualizes the sentiment distribution with a dynamic chart.",
+  "requestFramePermissions": []
+}
